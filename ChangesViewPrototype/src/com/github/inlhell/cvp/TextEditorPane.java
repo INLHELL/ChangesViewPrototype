@@ -17,6 +17,49 @@ import com.github.inlhell.cvp.model.CurrentlyOpenTextFile;
 @SuppressWarnings("serial")
 public class TextEditorPane extends JScrollPane {
 	
+	private TabbedPane tabbedPane;
+	
+	private final JTextArea textArea = new JTextArea();
+	
+	public TextEditorPane() {
+		
+		this.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+		this.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		this.setBackground(Color.GRAY);
+		this.setBorder(BorderFactory.createLineBorder(Color.black));
+	}
+	
+	public void createNewFile(final PropertyChangeListener propertyChangeListener) {
+		if (CurrentlyOpenTextFile.getInstance().getNumberOfAvailableFiles() == 1) {
+			this.textArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
+			this.textArea.setForeground(new Color(87, 109, 117));
+			this.textArea.setCaretPosition(0);
+			this.textArea.setMargin(new Insets(5, 5, 5, 5));
+			this.textArea.setLineWrap(true);
+			this.textArea.setBackground(new Color(253, 246, 227));
+			this.textArea.setWrapStyleWord(true);
+			this.textArea.getDocument().addDocumentListener(new TextAreaChangesListener());
+			this.textArea.setText(CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getText());
+			CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().setOpened(true);
+			this.setViewportView(this.textArea);
+		}
+		else {
+			
+			// If we already have one open file, we have to create the TabbedPane
+			// copy an existing open file to one tab, create a new tab and switch to
+			// it. Also we have to remove textArea from the TextEditorPanel.
+			if (this.tabbedPane == null) {
+				this.getViewport().remove(this.textArea);
+				this.tabbedPane = new TabbedPane();
+				this.tabbedPane.addNewTab(propertyChangeListener);
+				this.getViewport().add(this.tabbedPane);
+			}
+			else {
+				this.tabbedPane.addNewTab(propertyChangeListener);
+			}
+		}
+	}
+	
 	private final class TextAreaChangesListener implements DocumentListener {
 		
 		@Override
@@ -47,51 +90,6 @@ public class TextEditorPane extends JScrollPane {
 				CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().setChanged(false);
 			}
 			CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().touch();
-		}
-	}
-	
-	private TabbedPane tabbedPane;
-	
-	private final JTextArea textArea = new JTextArea();
-	
-	public TextEditorPane() {
-		
-		this.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
-		this.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		this.setBackground(Color.GRAY);
-		this.setBorder(BorderFactory.createLineBorder(Color.black));
-	}
-	
-	public void createNewFile(final PropertyChangeListener propertyChangeListener) {
-		if (CurrentlyOpenTextFile.getInstance().getNumberOfAvailableFiles() == 1) {
-			this.textArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
-			this.textArea.setForeground(new Color(87, 109, 117));
-			this.textArea.setCaretPosition(0);
-			this.textArea.setMargin(new Insets(5, 5, 5, 5));
-			this.textArea.setLineWrap(true);
-			this.textArea.setBackground(new Color(253, 246, 227));
-			this.textArea.setWrapStyleWord(true);
-			this.textArea.getDocument().addDocumentListener(new TextAreaChangesListener());
-			
-			this.setViewportView(this.textArea);
-			
-			this.textArea.setText(CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getText());
-			CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().setOpened(true);
-		}
-		else {
-			
-			// If we already have one open file, we have to create the TabbedPane
-			// copy an existing open file to one tab, create a new tab and switch to
-			// it. Also we have to remove textArea from the TextEditorPanel.
-			if (this.tabbedPane == null) {
-				this.getViewport().remove(this.textArea);
-				this.tabbedPane = new TabbedPane();
-				this.tabbedPane.addNewTab(propertyChangeListener);
-				this.getViewport().add(this.tabbedPane);
-			}
-			else {
-				this.tabbedPane.addNewTab(propertyChangeListener);
-			}
 		}
 	}
 }

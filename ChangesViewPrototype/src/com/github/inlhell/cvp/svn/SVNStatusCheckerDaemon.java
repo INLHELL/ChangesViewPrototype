@@ -40,7 +40,7 @@ public class SVNStatusCheckerDaemon extends Thread {
 			}
 			
 			try {
-				Thread.sleep(1000);
+				Thread.sleep(100);
 			}
 			catch (final InterruptedException e) {
 				// TODO Auto-generated catch block

@@ -35,7 +35,7 @@ import com.github.inlhell.cvp.svn.SVNStatusCheckerDaemon;
 public class BorderFrame extends SimpleFrame implements PropertyChangeListener, Observer {
 	
 	private File currentlyDirectory = new File(System.getProperty("user.home"));
-	private LocalChangesPane localChangesPane = null;
+	private LocalChangesPanel localChangesPanel = null;
 	private final JFileChooser saveDialog = new JFileChooser(this.currentlyDirectory);
 	private final JFileChooser selectDirectoryDialog = new JFileChooser(this.currentlyDirectory);
 	private final TextEditorPane textEditorPane;
@@ -62,14 +62,14 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 		});
 		fileMenu.add(newMenuItem);
 		
-		final JMenuItem openMenuItem = new JMenuItem("Open", null);
-		openMenuItem.addActionListener(new ActionListener() {
-			
-			@Override
-			public void actionPerformed(final ActionEvent arg0) {
-			}
-		});
-		fileMenu.add(openMenuItem);
+		// final JMenuItem openMenuItem = new JMenuItem("Open", null);
+		// openMenuItem.addActionListener(new ActionListener() {
+		//
+		// @Override
+		// public void actionPerformed(final ActionEvent arg0) {
+		// }
+		// });
+		// fileMenu.add(openMenuItem);
 		
 		final JMenuItem saveMenuItem = new JMenuItem("Save", null);
 		saveMenuItem.addActionListener(new ActionListener() {
@@ -99,8 +99,8 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 		});
 		fileMenu.add(saveAsMenuItem);
 		
-		final JMenuItem closeMenuItem = new JMenuItem("Close", null);
-		closeMenuItem.addActionListener(new ActionListener() {
+		final JMenuItem closeFileMenuItem = new JMenuItem("Close File", null);
+		closeFileMenuItem.addActionListener(new ActionListener() {
 			
 			@Override
 			public void actionPerformed(final ActionEvent arg0) {
@@ -108,7 +108,18 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 				System.exit(0);
 			}
 		});
-		fileMenu.add(closeMenuItem);
+		fileMenu.add(closeFileMenuItem);
+		
+		final JMenuItem exitMenuItem = new JMenuItem("Exit", null);
+		exitMenuItem.addActionListener(new ActionListener() {
+			
+			@Override
+			public void actionPerformed(final ActionEvent arg0) {
+				BorderFrame.this.saveAllBeforeClose();
+				System.exit(0);
+			}
+		});
+		fileMenu.add(exitMenuItem);
 		
 		menuBar.add(fileMenu);
 		
@@ -152,64 +163,11 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 		this.selectDirectoryDialog.setDialogTitle("Select SVN Directory");
 		this.selectDirectoryDialog.setAcceptAllFileFilterUsed(false);
 		if (this.selectDirectoryDialog.showDialog(this, "Select Directory") == JFileChooser.APPROVE_OPTION) {
-			System.out.println("getCurrentDirectory(): " + this.selectDirectoryDialog.getCurrentDirectory());
-			System.out.println("getSelectedFile() : " + this.selectDirectoryDialog.getSelectedFile());
-			
-			final File[] selectedFiles = this.selectDirectoryDialog.getCurrentDirectory().listFiles(new FilenameFilter() {
-				
-				@Override
-				public boolean accept(final File directory, final String fileName) {
-					return fileName.endsWith(".txt");
-				}
-			});
-			final SVNClientManager svnClientManager = SVNClientManager.newInstance();
-			for (final File selectedFile : selectedFiles) {
-				try {
-					final SVNStatus status = svnClientManager.getStatusClient().doStatus(selectedFile, true);
-					final SVNStatusType contentsStatus = status.getContentsStatus();
-					
-					final TextFile newlyCreatedTextFile = new TextFile();
-					newlyCreatedTextFile.setAbsolutePath(selectedFile.getAbsolutePath());
-					newlyCreatedTextFile.setName(selectedFile.getName());
-					newlyCreatedTextFile.setChanged(false);
-					newlyCreatedTextFile.setText(this.readFileAsString(selectedFile.getAbsolutePath()));
-					newlyCreatedTextFile.setInitialTextState(newlyCreatedTextFile.getText());
-					newlyCreatedTextFile.setSvnStatus(this.defineSVNStatus(contentsStatus));
-					newlyCreatedTextFile.addPropertyChangeListener(this);
-					newlyCreatedTextFile.setStored(true);
-					AvailableTextFiles.getInstance().addTextFile(newlyCreatedTextFile);
-					
-				}
-				catch (final SVNException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				catch (final IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
-			
-			// Panel contains changes view
-			this.localChangesPane = new LocalChangesPane();
-			this.getContentPane().add(this.textEditorPane, BorderLayout.CENTER);
-			this.getContentPane().add(this.localChangesPane, BorderLayout.SOUTH);
-			this.localChangesPane.registerObserver(this);
-			
-			for (final TextFile availableTextFile : AvailableTextFiles.getInstance().getAvailableTextFiles()) {
-				availableTextFile.addPropertyChangeListener(this.localChangesPane);
-			}
-			
-			// Start daemon
-			new SVNStatusCheckerDaemon();
-			
-			for (final File selectedFile : selectedFiles) {
-				System.out.println(selectedFile);
-			}
-			
+			this.checkSelectedDirectory();
 		}
 		else {
 			System.out.println("No Selection ");
+			System.exit(0);
 		}
 		
 	}
@@ -228,6 +186,9 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 	
 	protected void newMenuItemActionPerformed(@SuppressWarnings("unused") final ActionEvent arg0) {
 		this.textEditorPane.createNewFile(this);
+	}
+	
+	protected void saveAllBeforeClose() {
 	}
 	
 	protected void saveBeforeClose() {
@@ -309,5 +270,67 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 		}
 		reader.close();
 		return fileData.toString();
+	}
+	
+	@SuppressWarnings("unused")
+	private void checkSelectedDirectory() {
+		System.out.println("getCurrentDirectory(): " + this.selectDirectoryDialog.getCurrentDirectory());
+		System.out.println("getSelectedFile() : " + this.selectDirectoryDialog.getSelectedFile());
+		
+		final File[] selectedFiles = this.selectDirectoryDialog.getCurrentDirectory().listFiles(new FilenameFilter() {
+			
+			@Override
+			public boolean accept(final File directory, final String fileName) {
+				return fileName.endsWith(".txt");
+			}
+		});
+		final SVNClientManager svnClientManager = SVNClientManager.newInstance();
+		for (final File selectedFile : selectedFiles) {
+			try {
+				final SVNStatus status = svnClientManager.getStatusClient().doStatus(selectedFile, true);
+				final SVNStatusType contentsStatus = status.getContentsStatus();
+				
+				createNewTextFile(selectedFile, contentsStatus);
+				
+			}
+			catch (final SVNException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			catch (final IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		
+		// Panel contains changes view
+		this.localChangesPanel = new LocalChangesPanel();
+		this.getContentPane().add(this.textEditorPane, BorderLayout.CENTER);
+		this.getContentPane().add(this.localChangesPanel, BorderLayout.SOUTH);
+		this.localChangesPanel.registerObserver(this);
+		
+		for (final TextFile availableTextFile : AvailableTextFiles.getInstance().getAvailableTextFiles()) {
+			availableTextFile.addPropertyChangeListener(this.localChangesPanel);
+		}
+		
+		// Start daemon
+		new SVNStatusCheckerDaemon();
+		
+		for (final File selectedFile : selectedFiles) {
+			System.out.println(selectedFile);
+		}
+	}
+
+	private void createNewTextFile(final File selectedFile, final SVNStatusType contentsStatus) throws IOException {
+		final TextFile newlyCreatedTextFile = new TextFile();
+		newlyCreatedTextFile.setAbsolutePath(selectedFile.getAbsolutePath());
+		newlyCreatedTextFile.setName(selectedFile.getName());
+		newlyCreatedTextFile.setChanged(false);
+		newlyCreatedTextFile.setText(this.readFileAsString(selectedFile.getAbsolutePath()));
+		newlyCreatedTextFile.setInitialTextState(newlyCreatedTextFile.getText());
+		newlyCreatedTextFile.setSvnStatus(this.defineSVNStatus(contentsStatus));
+		newlyCreatedTextFile.addPropertyChangeListener(this);
+		newlyCreatedTextFile.setStored(true);
+		AvailableTextFiles.getInstance().addTextFile(newlyCreatedTextFile);
 	}
 }
