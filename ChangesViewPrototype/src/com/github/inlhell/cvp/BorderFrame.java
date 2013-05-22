@@ -7,9 +7,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
@@ -28,7 +26,9 @@ import org.tmatesoft.svn.core.wc.SVNStatusType;
 import com.github.inlhell.cvp.model.AvailableTextFiles;
 import com.github.inlhell.cvp.model.CurrentlyOpenTextFile;
 import com.github.inlhell.cvp.model.TextFile;
+import com.github.inlhell.cvp.model.TextFileUtil;
 import com.github.inlhell.cvp.observer.Observer;
+import com.github.inlhell.cvp.svn.SVNStatusChecker;
 import com.github.inlhell.cvp.svn.SVNStatusCheckerDaemon;
 
 @SuppressWarnings("serial")
@@ -48,6 +48,105 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 		// more then one open file)
 		this.textEditorPane = new TextEditorPane();
 		
+		this.createMenuBar();
+		
+		this.saveDialog.setFileSelectionMode(JFileChooser.FILES_ONLY);
+		this.saveDialog.addChoosableFileFilter(new FileNameExtensionFilter("Text Files (*.txt)", "txt"));
+		
+		this.selectDirectoryDialog.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+		this.selectDirectoryDialog.setDialogTitle("Select SVN Directory");
+		this.selectDirectoryDialog.setAcceptAllFileFilterUsed(false);
+		if (this.selectDirectoryDialog.showDialog(this, "Select Directory") == JFileChooser.APPROVE_OPTION) {
+			this.checkSelectedDirectory();
+		}
+		else {
+			System.exit(0);
+		}
+		
+	}
+	
+	@Override
+	public void propertyChange(final PropertyChangeEvent evt) {
+		if (this.isChangeCorrespondsToTitle(evt)) {
+			final StringBuffer stringBuffer = new StringBuffer();
+			stringBuffer.append("Changes View Prototype - ");
+			stringBuffer.append(CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getTitleWithPath());
+			this.setTitle(stringBuffer.toString());
+			this.saveDialog
+				.setSelectedFile(new File(CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getName()));
+		}
+	}
+	
+	private boolean isChangeCorrespondsToTitle(final PropertyChangeEvent evt) {
+		boolean isChangeCorrespondsToTitle = false;
+		
+		final boolean isCurrentlyOpenTextFileNotNull =
+			CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile() != null;
+		final boolean isEventOfNeededType =
+			evt.getPropertyName().equals("stored") || evt.getPropertyName().equals("changed")
+				|| evt.getPropertyName().equals("touch");
+		boolean isComingEventFromCurrentlyOpenFile = false;
+		if (isCurrentlyOpenTextFileNotNull) {
+			isComingEventFromCurrentlyOpenFile =
+				CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().equals(evt.getSource());
+		}
+		
+		if (isCurrentlyOpenTextFileNotNull && isComingEventFromCurrentlyOpenFile && isEventOfNeededType) {
+			isChangeCorrespondsToTitle = true;
+		}
+		return isChangeCorrespondsToTitle;
+	}
+	
+	@Override
+	public void update() {
+		this.textEditorPane.createNewFile(this);
+	}
+	
+	protected void newMenuItemActionPerformed(@SuppressWarnings("unused") final ActionEvent arg0) {
+		this.textEditorPane.createNewFile(this);
+	}
+	
+	protected void saveAllBeforeClose() {
+		for (final TextFile textFile : AvailableTextFiles.getInstance().getAvailableTextFiles()) {
+			if (textFile.isChanged()) {
+				this.saveFile(textFile.getAbsolutePath(), textFile.getName(), textFile);
+			}
+		}
+	}
+	
+	protected void saveFile(final String absolutePath, final String fileName, final TextFile textFile) {
+		try {
+			// Write actual file state to the file
+			final FileWriter fileWriter = new FileWriter(absolutePath);
+			fileWriter.write(textFile.getText());
+			fileWriter.close();
+			
+			// File was stored this means it is not changed
+			textFile.setChanged(false);
+			textFile.setStored(true);
+			// If the new name was specified we set it to the file
+			textFile.setName(fileName);
+			// If name was changed or the file was stored in sub directory it has a
+			// new absolute path
+			textFile.setAbsolutePath(absolutePath);
+			// An initial state of the file will be reset to its actual contetnt
+			textFile.setInitialTextState(textFile.getText());
+		}
+		catch (final IOException e) {
+			e.printStackTrace();
+		}
+		
+	}
+	
+	protected void saveFileAs() {
+		if (this.saveDialog.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
+			this.currentlyDirectory = this.saveDialog.getCurrentDirectory();
+			this.saveFile(this.saveDialog.getSelectedFile().getAbsolutePath(), this.saveDialog.getSelectedFile().getName(),
+				CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile());
+		}
+	}
+	
+	private void createMenuBar() {
 		// Menu bar and menu items (File->New|Save|Save As...|Close)
 		final JMenuBar menuBar = new JMenuBar();
 		
@@ -62,15 +161,6 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 		});
 		fileMenu.add(newMenuItem);
 		
-		// final JMenuItem openMenuItem = new JMenuItem("Open", null);
-		// openMenuItem.addActionListener(new ActionListener() {
-		//
-		// @Override
-		// public void actionPerformed(final ActionEvent arg0) {
-		// }
-		// });
-		// fileMenu.add(openMenuItem);
-		
 		final JMenuItem saveMenuItem = new JMenuItem("Save", null);
 		saveMenuItem.addActionListener(new ActionListener() {
 			
@@ -82,7 +172,8 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 				}
 				else {
 					BorderFrame.this.saveFile(CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getAbsolutePath(),
-						CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getName());
+						CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getName(), CurrentlyOpenTextFile
+							.getInstance().getCurrentlyOpenTextFile());
 				}
 				
 			}
@@ -99,17 +190,6 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 		});
 		fileMenu.add(saveAsMenuItem);
 		
-		final JMenuItem closeFileMenuItem = new JMenuItem("Close File", null);
-		closeFileMenuItem.addActionListener(new ActionListener() {
-			
-			@Override
-			public void actionPerformed(final ActionEvent arg0) {
-				BorderFrame.this.saveBeforeClose();
-				System.exit(0);
-			}
-		});
-		fileMenu.add(closeFileMenuItem);
-		
 		final JMenuItem exitMenuItem = new JMenuItem("Exit", null);
 		exitMenuItem.addActionListener(new ActionListener() {
 			
@@ -123,153 +203,7 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 		
 		menuBar.add(fileMenu);
 		
-		final JMenu editMenu = new JMenu("Edit");
-		
-		final JMenuItem cutMenuItem = new JMenuItem("Cut", null);
-		cutMenuItem.addActionListener(new ActionListener() {
-			
-			@Override
-			public void actionPerformed(final ActionEvent arg0) {
-			}
-		});
-		editMenu.add(cutMenuItem);
-		
-		final JMenuItem copyMenuItem = new JMenuItem("Copy", null);
-		copyMenuItem.addActionListener(new ActionListener() {
-			
-			@Override
-			public void actionPerformed(final ActionEvent arg0) {
-			}
-		});
-		editMenu.add(copyMenuItem);
-		
-		final JMenuItem pasteMenuItem = new JMenuItem("Paste", null);
-		pasteMenuItem.addActionListener(new ActionListener() {
-			
-			@Override
-			public void actionPerformed(final ActionEvent arg0) {
-			}
-		});
-		editMenu.add(pasteMenuItem);
-		
-		menuBar.add(editMenu);
-		
 		this.setJMenuBar(menuBar);
-		
-		this.saveDialog.setFileSelectionMode(JFileChooser.FILES_ONLY);
-		this.saveDialog.addChoosableFileFilter(new FileNameExtensionFilter("Text Files (*.txt)", "txt"));
-		
-		this.selectDirectoryDialog.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-		this.selectDirectoryDialog.setDialogTitle("Select SVN Directory");
-		this.selectDirectoryDialog.setAcceptAllFileFilterUsed(false);
-		if (this.selectDirectoryDialog.showDialog(this, "Select Directory") == JFileChooser.APPROVE_OPTION) {
-			this.checkSelectedDirectory();
-		}
-		else {
-			System.out.println("No Selection ");
-			System.exit(0);
-		}
-		
-	}
-	
-	@Override
-	public void propertyChange(final PropertyChangeEvent evt) {
-		this.setTitle("Changes View Prototype - "
-									+ CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getTitleWithPath());
-		this.saveDialog.setSelectedFile(new File(CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getName()));
-	}
-	
-	@Override
-	public void update() {
-		this.textEditorPane.createNewFile(this);
-	}
-	
-	protected void newMenuItemActionPerformed(@SuppressWarnings("unused") final ActionEvent arg0) {
-		this.textEditorPane.createNewFile(this);
-	}
-	
-	protected void saveAllBeforeClose() {
-	}
-	
-	protected void saveBeforeClose() {
-	}
-	
-	protected void saveFile(final String absolutePath, final String fileName) {
-		try {
-			final FileWriter fileWriter = new FileWriter(absolutePath);
-			fileWriter.write(CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getText());
-			fileWriter.close();
-			
-			CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().setChanged(false);
-			CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().setStored(true);
-			CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().setName(fileName);
-			CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().setAbsolutePath(absolutePath);
-			CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile()
-				.setInitialTextState(CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().getText());
-			CurrentlyOpenTextFile.getInstance().getCurrentlyOpenTextFile().touch();
-		}
-		catch (final IOException e) {
-			e.printStackTrace();
-		}
-		
-	}
-	
-	protected void saveFileAs() {
-		if (this.saveDialog.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
-			this.currentlyDirectory = this.saveDialog.getCurrentDirectory();
-			this.saveFile(this.saveDialog.getSelectedFile().getAbsolutePath(), this.saveDialog.getSelectedFile().getName());
-		}
-	}
-	
-	private String defineSVNStatus(final SVNStatusType contentsStatus) {
-		String svnStatus = null;
-		if (contentsStatus == SVNStatusType.STATUS_MODIFIED) {
-			svnStatus = "MODIFIED";
-		}
-		else if (contentsStatus == SVNStatusType.STATUS_CONFLICTED) {
-			svnStatus = "CONFLICTED";
-		}
-		else if (contentsStatus == SVNStatusType.STATUS_DELETED) {
-			svnStatus = "DELETED";
-		}
-		else if (contentsStatus == SVNStatusType.STATUS_ADDED) {
-			svnStatus = "ADDED";
-		}
-		else if (contentsStatus == SVNStatusType.STATUS_UNVERSIONED) {
-			svnStatus = "UNVERSIONED";
-		}
-		else if (contentsStatus == SVNStatusType.STATUS_EXTERNAL) {
-			svnStatus = "EXTERNAL";
-		}
-		else if (contentsStatus == SVNStatusType.STATUS_IGNORED) {
-			svnStatus = "IGNORED";
-		}
-		else if ((contentsStatus == SVNStatusType.STATUS_MISSING) || (contentsStatus == SVNStatusType.STATUS_INCOMPLETE)) {
-			svnStatus = "MISSING";
-		}
-		else if (contentsStatus == SVNStatusType.STATUS_OBSTRUCTED) {
-			svnStatus = "MISSING";
-		}
-		else if (contentsStatus == SVNStatusType.STATUS_REPLACED) {
-			svnStatus = "OBSTRUCTED";
-		}
-		else if ((contentsStatus == SVNStatusType.STATUS_NONE) || (contentsStatus == SVNStatusType.STATUS_NORMAL)) {
-			svnStatus = "NORMAL";
-		}
-		return svnStatus;
-	}
-	
-	private String readFileAsString(final String filePath) throws IOException {
-		final StringBuffer fileData = new StringBuffer();
-		final BufferedReader reader = new BufferedReader(new FileReader(filePath));
-		final char[] buf = new char[1024];
-		int numRead = 0;
-		while ((numRead = reader.read(buf)) != -1) {
-			final String readData = String.valueOf(buf, 0, numRead);
-			fileData.append(readData);
-		}
-		reader.close();
-		return fileData.toString();
 	}
 	
 	@SuppressWarnings("unused")
@@ -290,15 +224,14 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 				final SVNStatus status = svnClientManager.getStatusClient().doStatus(selectedFile, true);
 				final SVNStatusType contentsStatus = status.getContentsStatus();
 				
-				createNewTextFile(selectedFile, contentsStatus);
+				this.createNewTextFile(selectedFile, contentsStatus);
 				
 			}
 			catch (final SVNException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
+				System.exit(0);
 			}
 			catch (final IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
@@ -320,17 +253,15 @@ public class BorderFrame extends SimpleFrame implements PropertyChangeListener, 
 			System.out.println(selectedFile);
 		}
 	}
-
+	
 	private void createNewTextFile(final File selectedFile, final SVNStatusType contentsStatus) throws IOException {
 		final TextFile newlyCreatedTextFile = new TextFile();
 		newlyCreatedTextFile.setAbsolutePath(selectedFile.getAbsolutePath());
 		newlyCreatedTextFile.setName(selectedFile.getName());
-		newlyCreatedTextFile.setChanged(false);
-		newlyCreatedTextFile.setText(this.readFileAsString(selectedFile.getAbsolutePath()));
+		newlyCreatedTextFile.setText(TextFileUtil.getInstance().readFileAsString(selectedFile.getAbsolutePath()));
 		newlyCreatedTextFile.setInitialTextState(newlyCreatedTextFile.getText());
-		newlyCreatedTextFile.setSvnStatus(this.defineSVNStatus(contentsStatus));
+		newlyCreatedTextFile.setSvnStatus(SVNStatusChecker.getInstance().defineSVNStatus(contentsStatus));
 		newlyCreatedTextFile.addPropertyChangeListener(this);
-		newlyCreatedTextFile.setStored(true);
 		AvailableTextFiles.getInstance().addTextFile(newlyCreatedTextFile);
 	}
 }

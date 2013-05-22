@@ -11,7 +11,7 @@ public class TextFile {
 	private String name = "Untitled.txt";
 	private boolean opened = false;
 	private final PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
-	private boolean stored = false;
+	private boolean stored = true;
 	private String svnStatus;
 	private String text = "";
 	private final boolean touch = false;
@@ -91,35 +91,51 @@ public class TextFile {
 	}
 	
 	public void setAbsolutePath(final String absolutePath) {
+		final String oldAbsolutePath = this.absolutePath;
 		this.absolutePath = absolutePath;
+		this.propertyChangeSupport.firePropertyChange("absolutePath", oldAbsolutePath, this.absolutePath);
 	}
 	
 	public void setChanged(final boolean changed) {
+		final boolean oldChanged = this.changed;
 		this.changed = changed;
+		this.propertyChangeSupport.firePropertyChange("changed", oldChanged, this.changed);
 	}
 	
 	public void setInitialTextState(final String initialTextState) {
+		final String oldInitialTextState = this.initialTextState;
 		this.initialTextState = initialTextState;
+		this.propertyChangeSupport.firePropertyChange("initialTextState", oldInitialTextState, this.initialTextState);
 	}
 	
 	public void setName(final String name) {
+		final String oldName = this.name;
 		this.name = name;
+		this.propertyChangeSupport.firePropertyChange("name", oldName, this.name);
 	}
 	
 	public void setOpened(final boolean opened) {
+		final boolean oldOpened = this.opened;
 		this.opened = opened;
+		this.propertyChangeSupport.firePropertyChange("opened", oldOpened, this.opened);
 	}
 	
 	public void setStored(final boolean stored) {
+		final boolean oldStored = this.stored;
 		this.stored = stored;
+		this.propertyChangeSupport.firePropertyChange("stored", oldStored, this.stored);
 	}
 	
 	public void setSvnStatus(final String svnStatus) {
+		final String oldSVNStatus = this.svnStatus;
 		this.svnStatus = svnStatus;
+		this.propertyChangeSupport.firePropertyChange("svnStatus", oldSVNStatus, this.svnStatus);
 	}
 	
 	public void setText(final String text) {
+		final String oldText = this.text;
 		this.text = text;
+		this.propertyChangeSupport.firePropertyChange("text", oldText, this.text);
 	}
 	
 	public void touch() {

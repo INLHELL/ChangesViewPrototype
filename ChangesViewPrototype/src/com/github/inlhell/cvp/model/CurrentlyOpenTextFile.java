@@ -1,6 +1,5 @@
 package com.github.inlhell.cvp.model;
 
-
 public class CurrentlyOpenTextFile {
 	
 	private static class Handler {
